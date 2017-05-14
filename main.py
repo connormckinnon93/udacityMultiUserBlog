@@ -16,17 +16,39 @@ import os
 import webapp2
 import jinja2
 
+from google.appengine.ext import db
+
 template_dir = os.path.join(os.path.dirname(__file__), 'templates')
 jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir),
                                autoescape=True)
 
+# Secret is imported from the environment variable in app.yaml
 secret = os.getenv('SECRET', 'default_secret')
 
+
+# render_str is used in the Handler class
 def render_str(template, **params):
     t = jinja_env.get_template(template)
     return t.render(params)
 
 
+# BLOG STUFF
+def blog_key(name='default'):
+    return db.Key.from_path('blogs', name)
+
+
+class Post(db.Model):
+    subject = db.StringProperty(required=True)
+    content = db.TextProperty(required=True)
+    created = db.DateTimeProperty(auto_now_add=True)
+    last_modified = db.DateTimeProperty(auto_now=True)
+
+    def render(self):
+        self._render_text = self.content.replace('\n', '<br>')
+        return render_str("partials/post.html", p=self)
+
+
+# Handler serves as a parent to all page controllers
 class Handler(webapp2.RequestHandler):
 
     def write(self, *a, **kw):
@@ -42,6 +64,41 @@ class Handler(webapp2.RequestHandler):
 class MainPage(Handler):
 
     def get(self):
-        self.render('index.html')
+        posts = greetings = Post.all().order('-created')
+        self.render('index.html', posts=posts)
 
-app = webapp2.WSGIApplication([('/', MainPage)], debug=True)
+
+class SubmitPostPage(Handler):
+
+    def get(self):
+        self.render("newpost.html")
+
+    def post(self):
+        subject = self.request.get('subject')
+        content = self.request.get('content')
+
+        if subject and content:
+            p = Post(parent=blog_key(), subject=subject, content=content)
+            p.put()
+            self.redirect('/post/%s' % str(p.key().id()))
+        else:
+            error = "subject and content, please!"
+            self.render("newpost.html", subject=subject,
+                        content=content, error=error)
+
+
+class ViewPostPage(Handler):
+
+    def get(self, post_id):
+        key = db.Key.from_path('Post', int(post_id), parent=blog_key())
+        post = db.get(key)
+
+        if not post:
+            self.error(404)
+            return
+
+        self.render("permalink.html", post=post)
+
+app = webapp2.WSGIApplication([('/', MainPage),
+                               ('/newpost', SubmitPostPage),
+                               ('/post/([0-9]+)', ViewPostPage)], debug=True)
