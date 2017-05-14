@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 
 import webapp2
 import jinja2
@@ -33,7 +34,7 @@ class Handler(webapp2.RequestHandler):
         self.write(self.render_str(template, **kw))
 
 
-class MainPage(BlogHandler):
+class MainPage(Handler):
 
     def get(self):
         self.write('Hello, Udacity!')
