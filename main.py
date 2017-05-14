@@ -20,6 +20,12 @@ template_dir = os.path.join(os.path.dirname(__file__), 'templates')
 jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir),
                                autoescape=True)
 
+secret = os.getenv('SECRET', 'default_secret')
+
+def render_str(template, **params):
+    t = jinja_env.get_template(template)
+    return t.render(params)
+
 
 class Handler(webapp2.RequestHandler):
 
@@ -27,7 +33,6 @@ class Handler(webapp2.RequestHandler):
         self.response.out.write(*a, **kw)
 
     def render_str(self, template, **params):
-        params['user'] = self.user
         return render_str(template, **params)
 
     def render(self, template, **kw):
@@ -37,6 +42,6 @@ class Handler(webapp2.RequestHandler):
 class MainPage(Handler):
 
     def get(self):
-        self.write('Hello, Udacity!')
+        self.render('index.html')
 
 app = webapp2.WSGIApplication([('/', MainPage)], debug=True)
