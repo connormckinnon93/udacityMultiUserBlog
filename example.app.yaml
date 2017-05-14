@@ -1,0 +1,19 @@
+# RENAME AS app.yaml AND ADD YOUR OWN SECRET
+runtime: python27
+api_version: 1
+threadsafe: true
+
+handlers:
+- url: /static
+  static_dir: static
+  
+- url: /.*
+  script: main.app
+
+libraries:
+- name: jinja2
+  version: latest
+
+env_variables:
+  # ADD YOUR OWN SECRET BELOW
+  SECRET: 'REPLACE WITH YOUR OWN SECRET'
