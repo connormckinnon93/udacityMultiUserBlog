@@ -292,9 +292,17 @@ class LoginPage(Handler):
             msg = 'Invalid login'
             self.render('login.html', error=msg)
 
+
+class Logout(Handler):
+
+    def get(self):
+        self.logout()
+        self.redirect('/')
+
 app = webapp2.WSGIApplication([('/', MainPage),
                                ('/newpost', SubmitPostPage),
                                ('/post/([0-9]+)', ViewPostPage),
                                ('/signup', RegisterPage),
                                ('/user', UserPage),
-                               ('/login', LoginPage)], debug=True)
+                               ('/login', LoginPage),
+                               ('/logout', Logout)], debug=True)
