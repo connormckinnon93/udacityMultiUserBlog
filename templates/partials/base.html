@@ -17,7 +17,11 @@
                         <a href="/">Udacity Multi-User Blog</a>
                     </h1>
                     <hr>
-                    <p class="text-right"><a href="/newpost">Post</a></p>
+                    {% if user %}
+                        <p class="text-right"><a href="/newpost">Post</a></p>
+                    {% else %}
+                        <p class="text-right"><a href="/signup">Signup</a></p>
+                    {% endif %}
                 </div>
             </div>
             {% block content %}

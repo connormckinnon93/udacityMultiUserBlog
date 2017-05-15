@@ -1,9 +1,9 @@
 {% extends "partials/base.html" %}
 
 {% block content %}
-  <h2>new post</h2>
+    <h2>Post</h2>
 
-    <form>
+    <form method="post">
         <div class="form-group">
             <label for="subjectInput">Subject</label>
             <input type="text" class="form-control" id="subjectInput" placeholder="Subject" name="subject" value="{{ subject }}">

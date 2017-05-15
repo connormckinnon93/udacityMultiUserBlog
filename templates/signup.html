@@ -1,0 +1,30 @@
+{% extends "partials/base.html" %}
+
+{% block content %}
+  <h2>Sign-up</h2>
+
+    <form method="post">
+        <div class="form-group">
+            <label for="usernameInput">Username</label>
+            <input type="text" class="form-control" id="usernameInput" placeholder="Username" name="username" value="{{ username }}">
+            <span id="helpBlock-1" class="help-block">{{ error_username }}</span>
+        </div>
+        <div class="form-group">
+            <label for="passwordInput">Password</label>
+            <input type="password" class="form-control" id="passwordInput" placeholder="Password" name="password" value="{{ password }}">
+            <span id="helpBlock-2" class="help-block">{{ error_password }}</span>
+        </div>
+        <div class="form-group">
+            <label for="verifyInput">Verify Password</label>
+            <input type="password" class="form-control" id="verifyInput" placeholder="Verify Password" name="verify" value="{{ verify }}">
+            <span id="helpBlock-3" class="help-block">{{ error_verify }}</span>
+        </div>
+        <div class="form-group">
+            <label for="emailInput">Email</label>
+            <input type="text" class="form-control" id="emailInput" placeholder="Email" name="email" value="{{ email }}">
+            <span id="helpBlock-3" class="help-block">{{ error_email }}</span>
+        </div>
+        
+        <button type="submit" class="btn btn-default">Submit</button>
+    </form>
+{% endblock %}
