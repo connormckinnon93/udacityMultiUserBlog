@@ -176,14 +176,20 @@ class SubmitPostPage(Handler):
 
 
 USER_RE = re.compile(r"^[a-zA-Z0-9_-]{3,20}$")
+
+
 def valid_username(username):
     return username and USER_RE.match(username)
 
 PASS_RE = re.compile(r"^.{3,20}$")
+
+
 def valid_password(password):
     return password and PASS_RE.match(password)
 
-EMAIL_RE  = re.compile(r'^[\S]+@[\S]+\.[\S]+$')
+EMAIL_RE = re.compile(r'^[\S]+@[\S]+\.[\S]+$')
+
+
 def valid_email(email):
     return not email or EMAIL_RE.match(email)
 
@@ -268,8 +274,27 @@ class UserPage(Handler):
         else:
             self.redirect('/signup')
 
+
+class LoginPage(Handler):
+
+    def get(self):
+        self.render('login.html')
+
+    def post(self):
+        username = self.request.get('username')
+        password = self.request.get('password')
+
+        u = User.login(username, password)
+        if u:
+            self.login(u)
+            self.redirect('/user')
+        else:
+            msg = 'Invalid login'
+            self.render('login.html', error=msg)
+
 app = webapp2.WSGIApplication([('/', MainPage),
                                ('/newpost', SubmitPostPage),
                                ('/post/([0-9]+)', ViewPostPage),
                                ('/signup', RegisterPage),
-                               ('/user', UserPage)], debug=True)
+                               ('/user', UserPage),
+                               ('/login', LoginPage)], debug=True)
