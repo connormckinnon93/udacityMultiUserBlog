@@ -57,11 +57,11 @@ def make_pw_hash(name, pw, salt=None):
     if not salt:
         salt = make_salt()
     h = hashlib.sha256(name + pw + salt).hexdigest()
-    return '%s,%s' % (salt, h)
+    return '%s|%s' % (h, salt)
 
 
 def valid_pw(name, password, h):
-    salt = h.split(',')[0]
+    salt = h.split('|')[1]
     return h == make_pw_hash(name, password, salt)
 
 
@@ -106,6 +106,7 @@ def blog_key(name='default'):
 class Post(db.Model):
     subject = db.StringProperty(required=True)
     content = db.TextProperty(required=True)
+    user_id = db.TextProperty(required=True)
     created = db.DateTimeProperty(auto_now_add=True)
     last_modified = db.DateTimeProperty(auto_now=True)
 
@@ -164,9 +165,11 @@ class SubmitPostPage(Handler):
     def post(self):
         subject = self.request.get('subject')
         content = self.request.get('content')
+        user_id = str(self.user.key().id())
 
         if subject and content:
-            p = Post(parent=blog_key(), subject=subject, content=content)
+            p = Post(parent=blog_key(), subject=subject,
+                     content=content, user_id=user_id)
             p.put()
             self.redirect('/post/%s' % str(p.key().id()))
         else:
@@ -194,10 +197,6 @@ def valid_email(email):
     return not email or EMAIL_RE.match(email)
 
 
-def valid_email(email):
-    return not email or EMAIL_RE.match(email)
-
-
 class ViewPostPage(Handler):
 
     def get(self, post_id):
@@ -209,6 +208,27 @@ class ViewPostPage(Handler):
             return
 
         self.render("permalink.html", post=post)
+
+
+class DeleteController(Handler):
+
+    def post(self, post_id):
+        key = db.Key.from_path('Post', int(post_id), parent=blog_key())
+        post = db.get(key)
+        created_by = post.user_id
+        deleted_by = str(self.user.key().id())
+
+        if deleted_by == created_by:
+
+            if not post:
+                self.error(404)
+                return
+            else:
+                post.delete()
+
+            self.redirect('/user')
+        else:
+            self.redirect('/login')
 
 
 class Signup(Handler):
@@ -302,6 +322,7 @@ class Logout(Handler):
 app = webapp2.WSGIApplication([('/', MainPage),
                                ('/newpost', SubmitPostPage),
                                ('/post/([0-9]+)', ViewPostPage),
+                               ('/post/([0-9]+)/delete', DeleteController),
                                ('/signup', RegisterPage),
                                ('/user', UserPage),
                                ('/login', LoginPage),
