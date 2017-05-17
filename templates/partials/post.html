@@ -10,6 +10,6 @@
     </div>
     <div class="panel-footer">
         <form class="text-right" style="display: inline-block;" method="post" action="/post/{{ p.key().id() }}/delete"><button type="submit" class="btn btn-default">Delete</button></form>
-        <form class="text-right" style="display: inline-block;" method="post" action="/post/{{ p.key().id() }}/edit"><button type="submit" class="btn btn-default">Edit</button></form>
+        <form class="text-right" style="display: inline-block;" method="get" action="/post/{{ p.key().id() }}/edit"><button type="submit" class="btn btn-default">Edit</button></form>
     </div>
 </div>

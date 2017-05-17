@@ -216,7 +216,10 @@ class DeleteController(Handler):
         key = db.Key.from_path('Post', int(post_id), parent=blog_key())
         post = db.get(key)
         created_by = post.user_id
-        deleted_by = str(self.user.key().id())
+        deleted_by = ""
+
+        if self.user:
+            deleted_by = str(self.user.key().id())
 
         if deleted_by == created_by:
 
@@ -228,8 +231,57 @@ class DeleteController(Handler):
 
             self.redirect('/user')
         else:
-            self.redirect('/login')
+            self.render('error.html', error='delete')
 
+class EditController(Handler):
+
+    def get(self, post_id):
+        key = db.Key.from_path('Post', int(post_id), parent=blog_key())
+        post = db.get(key)
+        created_by = post.user_id
+        edited_by = ""
+
+        if self.user:
+            edited_by = str(self.user.key().id())            
+
+        if edited_by == created_by:
+            
+            if not post:
+                self.error(404)
+                return
+            else:
+                self.render("edit.html", post=post)
+        else:
+            self.render('error.html', error='edit')
+
+    def post(self, post_id):
+        key = db.Key.from_path('Post', int(post_id), parent=blog_key())
+        post = db.get(key)
+        created_by = post.user_id
+        edited_by = ""
+
+        if self.user:
+            edited_by = str(self.user.key().id())            
+
+        if edited_by == created_by:
+            if not post:
+                self.error(404)
+                return
+            else:
+                subject = self.request.get('subject')
+                content = self.request.get('content')
+
+                if subject and content:
+                    post.subject = subject
+                    post.content = content
+                    post.put()
+                    self.redirect('/post/%s' % str(post.key().id()))
+                else:
+                    error = "subject and content, please!"
+                    self.render("edit.html", subject=subject,
+                                content=content, error=error)
+        else:
+            self.redirect('/error')
 
 class Signup(Handler):
 
@@ -319,10 +371,16 @@ class Logout(Handler):
         self.logout()
         self.redirect('/signup')
 
+class ErrorHandler(Handler):
+
+    def get(self):
+        self.render('error.html')
+
 app = webapp2.WSGIApplication([('/', MainPage),
                                ('/newpost', SubmitPostPage),
                                ('/post/([0-9]+)', ViewPostPage),
                                ('/post/([0-9]+)/delete', DeleteController),
+                               ('/post/([0-9]+)/edit', EditController),
                                ('/signup', RegisterPage),
                                ('/user', UserPage),
                                ('/login', LoginPage),

@@ -1,0 +1,16 @@
+{% extends "partials/base.html" %}
+
+{% block content %}
+	{% if user %}
+		<h2>Sorry {{ user.name }}!</h2>
+	{% else %}
+		<h2>Sorry!</h2>
+	{% endif %}
+	
+	<p>You don't have permission to {{ error }} this post.</p>
+	{% if user %}
+		<p><a href="/">Click to return to main page</a></p>
+	{% else %}
+		<p><a href="/">Click to return to main page</a></p>
+	{% endif %}
+{% endblock %}
