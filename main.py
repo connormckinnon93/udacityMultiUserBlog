@@ -160,7 +160,10 @@ class MainPage(Handler):
 class SubmitPostPage(Handler):
 
     def get(self):
-        self.render("newpost.html")
+        if self.user:
+            self.render("newpost.html")
+        else:
+            self.redirect('/login')
 
     def post(self):
         subject = self.request.get('subject')
@@ -244,15 +247,17 @@ class EditController(Handler):
         if self.user:
             edited_by = str(self.user.key().id())            
 
-        if edited_by == created_by:
-            
-            if not post:
-                self.error(404)
-                return
+            if edited_by == created_by:
+                
+                if not post:
+                    self.error(404)
+                    return
+                else:
+                    self.render("edit.html", post=post)
             else:
-                self.render("edit.html", post=post)
+                self.render('error.html', error='edit')
         else:
-            self.render('error.html', error='edit')
+            self.redirect('/login')
 
     def post(self, post_id):
         key = db.Key.from_path('Post', int(post_id), parent=blog_key())
