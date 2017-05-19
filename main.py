@@ -106,13 +106,24 @@ def blog_key(name='default'):
 class Post(db.Model):
     subject = db.StringProperty(required=True)
     content = db.TextProperty(required=True)
-    user_id = db.TextProperty(required=True)
+    user_id = db.StringProperty(required=True)
+    user_name = db.StringProperty()
+    likes = db.IntegerProperty()
     created = db.DateTimeProperty(auto_now_add=True)
     last_modified = db.DateTimeProperty(auto_now=True)
 
     def render(self):
         self._render_text = self.content.replace('\n', '<br>')
         return render_str("partials/post.html", p=self)
+
+class Like(db.Model):
+    user_id = db.StringProperty(required=True)
+    post_id = db.StringProperty(required=True)
+
+    @classmethod
+    def by_user_post(cls, user_id, post_id):
+        l = Like.all().filter('user_id =', user_id).filter('post_id =', post_id).get()
+        return l
 
 
 # Handler serves as a parent to all page controllers
@@ -153,7 +164,7 @@ class Handler(webapp2.RequestHandler):
 class MainPage(Handler):
 
     def get(self):
-        posts = greetings = Post.all().order('-created')
+        posts = Post.all().order('-created')
         self.render('index.html', posts=posts)
 
 
@@ -169,10 +180,11 @@ class SubmitPostPage(Handler):
         subject = self.request.get('subject')
         content = self.request.get('content')
         user_id = str(self.user.key().id())
+        user_name = self.user.name
 
         if subject and content:
             p = Post(parent=blog_key(), subject=subject,
-                     content=content, user_id=user_id)
+                     content=content, likes=0, user_id=user_id, user_name=user_name)
             p.put()
             self.redirect('/post/%s' % str(p.key().id()))
         else:
@@ -182,20 +194,14 @@ class SubmitPostPage(Handler):
 
 
 USER_RE = re.compile(r"^[a-zA-Z0-9_-]{3,20}$")
-
-
 def valid_username(username):
     return username and USER_RE.match(username)
 
 PASS_RE = re.compile(r"^.{3,20}$")
-
-
 def valid_password(password):
     return password and PASS_RE.match(password)
 
 EMAIL_RE = re.compile(r'^[\S]+@[\S]+\.[\S]+$')
-
-
 def valid_email(email):
     return not email or EMAIL_RE.match(email)
 
@@ -236,6 +242,41 @@ class DeleteController(Handler):
         else:
             self.render('error.html', error='delete')
 
+class LikeController(Handler):
+
+    def post(self, post_id):
+        key = db.Key.from_path('Post', int(post_id), parent=blog_key())
+        post = db.get(key)
+        created_by = post.user_id
+        liked_by = ""
+
+        if self.user:
+            liked_by = str(self.user.key().id())
+
+            if liked_by != created_by:
+
+                if not post:
+                    self.error(404)
+                    return
+                else:
+                    like = Like.by_user_post(liked_by, str(post.key().id()))
+                    if like:
+                        post.likes -= 1
+                        like.delete()
+                        post.put()
+                    else:
+                        post.likes += 1
+                        l = Like(parent=blog_key(), user_id=liked_by, post_id=str(post.key().id()))
+                        l.put()
+                        post.put()
+
+                    self.redirect('/post/%s' % str(post.key().id()))
+            else:
+                self.render('error.html', error='like')
+        else:
+            self.redirect('/login')
+
+
 class EditController(Handler):
 
     def get(self, post_id):
@@ -245,10 +286,10 @@ class EditController(Handler):
         edited_by = ""
 
         if self.user:
-            edited_by = str(self.user.key().id())            
+            edited_by = str(self.user.key().id())
 
             if edited_by == created_by:
-                
+
                 if not post:
                     self.error(404)
                     return
@@ -266,7 +307,7 @@ class EditController(Handler):
         edited_by = ""
 
         if self.user:
-            edited_by = str(self.user.key().id())            
+            edited_by = str(self.user.key().id())
 
         if edited_by == created_by:
             if not post:
@@ -287,6 +328,7 @@ class EditController(Handler):
                                 content=content, error=error)
         else:
             self.redirect('/error')
+
 
 class Signup(Handler):
 
@@ -347,7 +389,8 @@ class UserPage(Handler):
 
     def get(self):
         if self.user:
-            self.render('welcome.html', username=self.user.name)
+            posts = Post.all().filter('user_id =', str(self.user.key().id())).order('-created')
+            self.render('welcome.html', username=self.user.name, posts=posts)
         else:
             self.redirect('/signup')
 
@@ -376,6 +419,7 @@ class Logout(Handler):
         self.logout()
         self.redirect('/signup')
 
+
 class ErrorHandler(Handler):
 
     def get(self):
@@ -386,6 +430,7 @@ app = webapp2.WSGIApplication([('/', MainPage),
                                ('/post/([0-9]+)', ViewPostPage),
                                ('/post/([0-9]+)/delete', DeleteController),
                                ('/post/([0-9]+)/edit', EditController),
+                               ('/post/([0-9]+)/like', LikeController),
                                ('/signup', RegisterPage),
                                ('/user', UserPage),
                                ('/login', LoginPage),
