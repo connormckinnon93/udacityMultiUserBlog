@@ -116,17 +116,25 @@ class Post(db.Model):
         self._render_text = self.content.replace('\n', '<br>')
         return render_str("partials/post.html", p=self)
 
+
 class Like(db.Model):
     user_id = db.StringProperty(required=True)
     post_id = db.StringProperty(required=True)
 
-    @classmethod
-    def by_user_post(cls, user_id, post_id):
-        l = Like.all().filter('user_id =', user_id).filter('post_id =', post_id).get()
-        return l
 
+class Comment(db.Model):
+    user_id = db.StringProperty(required=True)
+    post_id = db.StringProperty(required=True)
+    content = db.TextProperty(required=True)
+    created = db.DateTimeProperty(auto_now_add=True)
+
+    def render(self):
+        self._render_text = self.content.replace('\n', '<br>')
+        return render_str("partials/comment.html", c=self)
 
 # Handler serves as a parent to all page controllers
+
+
 class Handler(webapp2.RequestHandler):
 
     def write(self, *a, **kw):
@@ -183,8 +191,8 @@ class SubmitPostPage(Handler):
         user_name = self.user.name
 
         if subject and content:
-            p = Post(parent=blog_key(), subject=subject,
-                     content=content, likes=0, user_id=user_id, user_name=user_name)
+            p = Post(parent=blog_key(), subject=subject, content=content,
+                     likes=0, user_id=user_id, user_name=user_name)
             p.put()
             self.redirect('/post/%s' % str(p.key().id()))
         else:
@@ -194,14 +202,20 @@ class SubmitPostPage(Handler):
 
 
 USER_RE = re.compile(r"^[a-zA-Z0-9_-]{3,20}$")
+
+
 def valid_username(username):
     return username and USER_RE.match(username)
 
 PASS_RE = re.compile(r"^.{3,20}$")
+
+
 def valid_password(password):
     return password and PASS_RE.match(password)
 
 EMAIL_RE = re.compile(r'^[\S]+@[\S]+\.[\S]+$')
+
+
 def valid_email(email):
     return not email or EMAIL_RE.match(email)
 
@@ -211,12 +225,39 @@ class ViewPostPage(Handler):
     def get(self, post_id):
         key = db.Key.from_path('Post', int(post_id), parent=blog_key())
         post = db.get(key)
-
+        comments = Comment.all().order('-created')
         if not post:
             self.error(404)
             return
 
-        self.render("permalink.html", post=post)
+        if not comments:
+            comments = ""
+
+        self.render("permalink.html", post=post, comments=comments)
+
+
+class CommentController(Handler):
+
+    def get(self, post_id):
+        key = db.Key.from_path('Post', int(post_id), parent=blog_key())
+        post = db.get(key)
+
+        if self.user:
+            self.render("newcomment.html", post=post)
+        else:
+            self.redirect('/login')
+
+    def post(self, post_id):
+        content = self.request.get('content')
+        user_id = str(self.user.key().id())
+
+        if self.user:
+            c = Comment(parent=blog_key(), user_id=user_id,
+                        post_id=post_id, content=content)
+            c.put()
+            self.redirect('/post/%s' % post_id)
+        else:
+            self.redirect('/login')
 
 
 class DeleteController(Handler):
@@ -230,17 +271,20 @@ class DeleteController(Handler):
         if self.user:
             deleted_by = str(self.user.key().id())
 
-        if deleted_by == created_by:
+            if deleted_by == created_by:
 
-            if not post:
-                self.error(404)
-                return
+                if not post:
+                    self.error(404)
+                    return
+                else:
+                    post.delete()
+
+                self.redirect('/user')
             else:
-                post.delete()
-
-            self.redirect('/user')
+                self.render('error.html', error='delete')
         else:
-            self.render('error.html', error='delete')
+            self.redirect('/login')
+
 
 class LikeController(Handler):
 
@@ -266,7 +310,8 @@ class LikeController(Handler):
                         post.put()
                     else:
                         post.likes += 1
-                        l = Like(parent=blog_key(), user_id=liked_by, post_id=str(post.key().id()))
+                        l = Like(parent=blog_key(), user_id=liked_by,
+                                 post_id=str(post.key().id()))
                         l.put()
                         post.put()
 
@@ -429,6 +474,7 @@ app = webapp2.WSGIApplication([('/', MainPage),
                                ('/newpost', SubmitPostPage),
                                ('/post/([0-9]+)', ViewPostPage),
                                ('/post/([0-9]+)/delete', DeleteController),
+                               ('/post/([0-9]+)/comment', CommentController),
                                ('/post/([0-9]+)/edit', EditController),
                                ('/post/([0-9]+)/like', LikeController),
                                ('/signup', RegisterPage),
