@@ -120,6 +120,11 @@ class Post(db.Model):
 class Like(db.Model):
     user_id = db.StringProperty(required=True)
     post_id = db.StringProperty(required=True)
+    
+    @classmethod
+    def by_user_post(cls, user_id, post_id):
+        l = Like.all().filter('user_id =', user_id).filter('post_id =', post_id).get()
+        return l
 
 
 class Comment(db.Model):
@@ -225,7 +230,7 @@ class ViewPostPage(Handler):
     def get(self, post_id):
         key = db.Key.from_path('Post', int(post_id), parent=blog_key())
         post = db.get(key)
-        comments = Comment.all().order('-created')
+        comments = Comment.all().filter('post_id =', post_id).order('-created')
         if not post:
             self.error(404)
             return
@@ -372,8 +377,83 @@ class EditController(Handler):
                     self.render("edit.html", subject=subject,
                                 content=content, error=error)
         else:
-            self.redirect('/error')
+            self.render('error.html', error='edit')
 
+
+class EditCommentController(Handler):
+
+    def get(self, comment_id):
+        key = db.Key.from_path('Comment', int(comment_id), parent=blog_key())
+        comment = db.get(key)
+        created_by = comment.user_id
+        edited_by = ""
+
+        if self.user:
+            edited_by = str(self.user.key().id())
+
+            if edited_by == created_by:
+
+                if not comment:
+                    self.error(404)
+                    return
+                else:
+                    self.render("editcomment.html", comment=comment)
+            else:
+                self.render('error.html', error='edit')
+        else:
+            self.redirect('/login')
+
+    def post(self, comment_id):
+        key = db.Key.from_path('Comment', int(comment_id), parent=blog_key())
+        comment = db.get(key)
+        created_by = comment.user_id
+        edited_by = ""
+
+        if self.user:
+            edited_by = str(self.user.key().id())
+
+        if edited_by == created_by:
+            if not comment:
+                self.error(404)
+                return
+            else:
+                content = self.request.get('content')
+
+                if content:
+                    comment.content = content
+                    comment.put()
+                    self.redirect('/post/%s' % str(comment.post_id))
+                else:
+                    error = "content, please!"
+                    self.render("editcomment.html",
+                                content=content, error=error)
+        else:
+            self.render('error.html', error='edit')
+
+class DeleteCommentController(Handler):
+
+    def post(self, comment_id):
+        key = db.Key.from_path('Comment', int(comment_id), parent=blog_key())
+        comment = db.get(key)
+        created_by = comment.user_id
+        deleted_by = ""
+
+        if self.user:
+            deleted_by = str(self.user.key().id())
+
+            if deleted_by == created_by:
+
+                if not comment:
+                    self.error(404)
+                    return
+                else:
+                    comment.delete()
+
+                self.redirect('/user')
+            else:
+                self.render('error.html', error='delete')
+        else:
+            self.redirect('/login')
 
 class Signup(Handler):
 
@@ -434,7 +514,8 @@ class UserPage(Handler):
 
     def get(self):
         if self.user:
-            posts = Post.all().filter('user_id =', str(self.user.key().id())).order('-created')
+            user_id = str(self.user.key().id())
+            posts = Post.all().filter('user_id =', user_id).order('-created')
             self.render('welcome.html', username=self.user.name, posts=posts)
         else:
             self.redirect('/signup')
@@ -475,6 +556,8 @@ app = webapp2.WSGIApplication([('/', MainPage),
                                ('/post/([0-9]+)', ViewPostPage),
                                ('/post/([0-9]+)/delete', DeleteController),
                                ('/post/([0-9]+)/comment', CommentController),
+                               ('/comment/([0-9]+)/edit', EditCommentController),
+                               ('/comment/([0-9]+)/delete', DeleteCommentController),
                                ('/post/([0-9]+)/edit', EditController),
                                ('/post/([0-9]+)/like', LikeController),
                                ('/signup', RegisterPage),
