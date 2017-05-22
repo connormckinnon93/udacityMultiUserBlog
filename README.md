@@ -1,8 +1,8 @@
 # GAE Multi User Blog
 
-*Program:* Udacity Full Stack Web Developer Nanodegree
-*Project 3:* Multi User Blog
-*Languages:* Python, HTML, CSS, JS, GAE
+-*Program:* Udacity Full Stack Web Developer Nanodegree
+-*Project 3:* Multi User Blog
+-*Languages:* Python, HTML, CSS, JS, GAE
 
 # Getting Started
 
