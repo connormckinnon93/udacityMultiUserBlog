@@ -17,3 +17,5 @@ libraries:
 env_variables:
   # ADD YOUR OWN SECRET BELOW
   SECRET: 'REPLACE WITH YOUR OWN SECRET'
+  # Turn debug off
+  DEBUG: false
