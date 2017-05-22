@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import os
 import re
 import random
@@ -47,8 +48,6 @@ def check_secure_val(secure_val):
         return val
 
 # USER STUFF
-
-
 def make_salt(length=5):
     return ''.join(random.choice(letters) for x in xrange(length))
 
@@ -138,8 +137,6 @@ class Comment(db.Model):
         return render_str("partials/comment.html", c=self)
 
 # Handler serves as a parent to all page controllers
-
-
 class Handler(webapp2.RequestHandler):
 
     def write(self, *a, **kw):
@@ -167,6 +164,14 @@ class Handler(webapp2.RequestHandler):
 
     def logout(self):
         self.response.headers.add_header('Set-Cookie', 'user_id=; Path=/')
+    
+    def check_for_user(self):
+        if self.user:
+            user_id = str(self.user.key().id())
+            return user_id
+        else:
+            user_id = ""
+            return False
 
     def initialize(self, *a, **kw):
         webapp2.RequestHandler.initialize(self, *a, **kw)
@@ -206,30 +211,35 @@ class SubmitPostPage(Handler):
                         content=content, error=error)
 
 
-USER_RE = re.compile(r"^[a-zA-Z0-9_-]{3,20}$")
-
 
 def valid_username(username):
+    USER_RE = re.compile(r"^[a-zA-Z0-9_-]{3,20}$")
     return username and USER_RE.match(username)
-
-PASS_RE = re.compile(r"^.{3,20}$")
 
 
 def valid_password(password):
+    PASS_RE = re.compile(r"^.{3,20}$")
     return password and PASS_RE.match(password)
-
-EMAIL_RE = re.compile(r'^[\S]+@[\S]+\.[\S]+$')
 
 
 def valid_email(email):
+    EMAIL_RE = re.compile(r'^[\S]+@[\S]+\.[\S]+$')
     return not email or EMAIL_RE.match(email)
 
+def find_post(post_id):
+    key = db.Key.from_path('Post', int(post_id), parent=blog_key())
+    post = db.get(key)
+    return post
+
+def find_comment(comment_id):
+    key = db.Key.from_path('Comment', int(comment_id), parent=blog_key())
+    comment = db.get(key)
+    return comment
 
 class ViewPostPage(Handler):
 
     def get(self, post_id):
-        key = db.Key.from_path('Post', int(post_id), parent=blog_key())
-        post = db.get(key)
+        post = find_post(post_id)
         comments = Comment.all().filter('post_id =', post_id).order('-created')
         if not post:
             self.error(404)
@@ -240,23 +250,48 @@ class ViewPostPage(Handler):
 
         self.render("permalink.html", post=post, comments=comments)
 
+class Controller(Handler):
+
+    def secure_interaction(self, id, item_type="Post", error_type="delete", match_user=True):
+        if item_type == "Post":
+            item = find_post(id)
+        elif item_type == "Comment":
+            item = find_comment(id)
+        else:
+            self.error(404)
+            return
+
+        created_by = item.user_id
+        modified_by = self.check_for_user()
+
+        if not modified_by:
+            self.redirect('/login')
+            return
+        else:
+            if match_user and (created_by == modified_by):
+                return item
+            elif not match_user and (created_by != modified_by):
+                return item
+            else:
+                self.render('error.html', error=error_type)
+
+
 
 class CommentController(Handler):
 
     def get(self, post_id):
-        key = db.Key.from_path('Post', int(post_id), parent=blog_key())
-        post = db.get(key)
+        post = find_post(post_id)
 
-        if self.user:
+        if self.check_for_user():
             self.render("newcomment.html", post=post)
         else:
             self.redirect('/login')
 
     def post(self, post_id):
         content = self.request.get('content')
-        user_id = str(self.user.key().id())
+        user_id = self.check_for_user()
 
-        if self.user:
+        if user_id:
             c = Comment(parent=blog_key(), user_id=user_id,
                         post_id=post_id, content=content)
             c.put()
@@ -265,79 +300,47 @@ class CommentController(Handler):
             self.redirect('/login')
 
 
-class DeleteController(Handler):
+class DeleteController(Controller):
 
     def post(self, post_id):
-        key = db.Key.from_path('Post', int(post_id), parent=blog_key())
-        post = db.get(key)
-        created_by = post.user_id
-        deleted_by = ""
-
-        if self.user:
-            deleted_by = str(self.user.key().id())
-
-            if deleted_by == created_by:
-
-                if not post:
-                    self.error(404)
-                    return
-                else:
-                    post.delete()
-
-                self.redirect('/user')
-            else:
-                self.render('error.html', error='delete')
-        else:
-            self.redirect('/login')
+        post = self.secure_interaction(post_id)
+        if post:
+            post.delete()
+            self.redirect('/')
 
 
-class LikeController(Handler):
+class LikeController(Controller):
 
     def post(self, post_id):
-        key = db.Key.from_path('Post', int(post_id), parent=blog_key())
-        post = db.get(key)
-        created_by = post.user_id
-        liked_by = ""
-
-        if self.user:
-            liked_by = str(self.user.key().id())
-
-            if liked_by != created_by:
-
-                if not post:
-                    self.error(404)
-                    return
-                else:
-                    like = Like.by_user_post(liked_by, str(post.key().id()))
-                    if like:
-                        post.likes -= 1
-                        like.delete()
-                        post.put()
-                    else:
-                        post.likes += 1
-                        l = Like(parent=blog_key(), user_id=liked_by,
-                                 post_id=str(post.key().id()))
-                        l.put()
-                        post.put()
-
-                    self.redirect('/post/%s' % str(post.key().id()))
+        # TODO: Fix NoneType error and instead have it render error.html with error
+        post = self.secure_interaction(post_id, error_type="like", match_user=False)
+        if post:
+            user_id = self.check_for_user()
+            like = Like.by_user_post(user_id, str(post.key().id()))
+            if like:
+                post.likes -= 1
+                like.delete()
+                post.put()
             else:
-                self.render('error.html', error='like')
+                post.likes += 1
+                l = Like(parent=blog_key(), user_id=user_id,
+                         post_id=str(post.key().id()))
+                l.put()
+                post.put()
+
+            self.redirect('/post/%s' % str(post.key().id()))
         else:
-            self.redirect('/login')
+            self.redirect('/')
 
 
 class EditController(Handler):
 
     def get(self, post_id):
-        key = db.Key.from_path('Post', int(post_id), parent=blog_key())
-        post = db.get(key)
+        post = find_post(post_id)
         created_by = post.user_id
-        edited_by = ""
+        edited_by = self.check_for_user()
 
-        if self.user:
-            edited_by = str(self.user.key().id())
-
+        if edited_by:
             if edited_by == created_by:
 
                 if not post:
@@ -351,46 +354,42 @@ class EditController(Handler):
             self.redirect('/login')
 
     def post(self, post_id):
-        key = db.Key.from_path('Post', int(post_id), parent=blog_key())
-        post = db.get(key)
+        post = find_post(post_id)
         created_by = post.user_id
-        edited_by = ""
+        edited_by = self.check_for_user()
 
-        if self.user:
-            edited_by = str(self.user.key().id())
-
-        if edited_by == created_by:
-            if not post:
-                self.error(404)
-                return
-            else:
-                subject = self.request.get('subject')
-                content = self.request.get('content')
-
-                if subject and content:
-                    post.subject = subject
-                    post.content = content
-                    post.put()
-                    self.redirect('/post/%s' % str(post.key().id()))
+        if edited_by:
+            if edited_by == created_by:
+                if not post:
+                    self.error(404)
+                    return
                 else:
-                    error = "subject and content, please!"
-                    self.render("edit.html", subject=subject,
-                                content=content, error=error)
+                    subject = self.request.get('subject')
+                    content = self.request.get('content')
+
+                    if subject and content:
+                        post.subject = subject
+                        post.content = content
+                        post.put()
+                        self.redirect('/post/%s' % str(post.key().id()))
+                    else:
+                        error = "subject and content, please!"
+                        self.render("edit.html", subject=subject,
+                                    content=content, error=error)
+            else:
+                self.render('error.html', error='edit')
         else:
-            self.render('error.html', error='edit')
+            self.redirect('/login')
 
 
 class EditCommentController(Handler):
 
     def get(self, comment_id):
-        key = db.Key.from_path('Comment', int(comment_id), parent=blog_key())
-        comment = db.get(key)
+        comment = find_comment(comment_id)
         created_by = comment.user_id
-        edited_by = ""
+        edited_by = self.check_for_user()
 
-        if self.user:
-            edited_by = str(self.user.key().id())
-
+        if edited_by:
             if edited_by == created_by:
 
                 if not comment:
@@ -404,43 +403,41 @@ class EditCommentController(Handler):
             self.redirect('/login')
 
     def post(self, comment_id):
-        key = db.Key.from_path('Comment', int(comment_id), parent=blog_key())
-        comment = db.get(key)
+        comment = find_comment(comment_id)
         created_by = comment.user_id
-        edited_by = ""
+        edited_by = self.check_for_user()
 
         if self.user:
             edited_by = str(self.user.key().id())
 
-        if edited_by == created_by:
-            if not comment:
-                self.error(404)
-                return
-            else:
-                content = self.request.get('content')
-
-                if content:
-                    comment.content = content
-                    comment.put()
-                    self.redirect('/post/%s' % str(comment.post_id))
+            if edited_by == created_by:
+                if not comment:
+                    self.error(404)
+                    return
                 else:
-                    error = "content, please!"
-                    self.render("editcomment.html",
-                                content=content, error=error)
+                    content = self.request.get('content')
+
+                    if content:
+                        comment.content = content
+                        comment.put()
+                        self.redirect('/post/%s' % str(comment.post_id))
+                    else:
+                        error = "content, please!"
+                        self.render("editcomment.html",
+                                    content=content, error=error)
+            else:
+                self.render('error.html', error='edit')
         else:
-            self.render('error.html', error='edit')
+            self.redirect('/login')
 
 class DeleteCommentController(Handler):
 
     def post(self, comment_id):
-        key = db.Key.from_path('Comment', int(comment_id), parent=blog_key())
-        comment = db.get(key)
+        comment = find_comment(comment_id)
         created_by = comment.user_id
-        deleted_by = ""
+        deleted_by = self.check_for_user()
 
-        if self.user:
-            deleted_by = str(self.user.key().id())
-
+        if deleted_by:
             if deleted_by == created_by:
 
                 if not comment:
@@ -513,8 +510,8 @@ class RegisterPage(Signup):
 class UserPage(Handler):
 
     def get(self):
-        if self.user:
-            user_id = str(self.user.key().id())
+        user_id = self.check_for_user()
+        if user_id:
             posts = Post.all().filter('user_id =', user_id).order('-created')
             self.render('welcome.html', username=self.user.name, posts=posts)
         else:
